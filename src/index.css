@@ -22,10 +22,8 @@
   --font-family-sans: 'Inter', system-ui, sans-serif;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 html, body, #root {
@@ -33,9 +31,6 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background-color: #f6f6f9;
-  color: #1a1a2e;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

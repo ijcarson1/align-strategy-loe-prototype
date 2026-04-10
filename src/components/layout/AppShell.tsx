@@ -50,7 +50,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <div className="flex flex-1 flex-col overflow-y-auto">
+        <div className="@container/main flex flex-1 flex-col overflow-y-auto">
           {children}
         </div>
       </SidebarInset>
