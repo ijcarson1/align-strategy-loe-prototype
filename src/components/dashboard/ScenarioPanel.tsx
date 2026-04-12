@@ -25,11 +25,11 @@ export default function ScenarioPanel({ baseForecast, alternateForecast, baseLab
   const altPost = alternateForecast.filter(p => p.isPostLOE);
   const chartData = basePost.map((p, i) => ({
     label: p.label,
-    base: Math.round(p.brandRevenue),
-    alternate: Math.round(altPost[i]?.brandRevenue ?? 0),
+    base: Math.round(p.grossSales),
+    alternate: Math.round(altPost[i]?.grossSales ?? 0),
   }));
-  const baseCum = basePost.reduce((s, p) => s + p.brandRevenue, 0);
-  const altCum = altPost.reduce((s, p) => s + p.brandRevenue, 0);
+  const baseCum = basePost.reduce((s, p) => s + p.grossSales, 0);
+  const altCum = altPost.reduce((s, p) => s + p.grossSales, 0);
   const delta = baseCum - altCum;
 
   const CustomTooltip = ({ active, payload, label }: any) => {

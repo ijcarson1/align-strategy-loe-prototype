@@ -12,9 +12,13 @@ function computeWeightedGrowthRate(volumes: number[]): number {
   return r1 * 0.6 + r2 * 0.3 + r3 * 0.1;
 }
 
+/**
+ * Project annual volumes using per-segment weighted dampening.
+ * Computes a single blended dampening factor from segment weights.
+ */
 function projectVolumes(
   historical: HistoricalVolume[],
-  dampeningFactor: number,
+  blendedDampening: number,
   throughYear: number
 ): { year: number; units: number; isHistorical: boolean }[] {
   const sorted = [...historical].sort((a, b) => a.year - b.year);
@@ -28,7 +32,7 @@ function projectVolumes(
 
   while (currentYear < throughYear) {
     const growth = computeWeightedGrowthRate(rollingVolumes);
-    const dampened = growth * dampeningFactor;
+    const dampened = growth * blendedDampening;
     const nextVol = Math.max(0, rollingVolumes[rollingVolumes.length - 1] * (1 + dampened));
     currentYear++;
     result.push({ year: currentYear, units: Math.round(nextVol), isHistorical: false });
@@ -54,20 +58,70 @@ function monthsBetween(
   return (toYear - fromYear) * 12 + (toMonth - fromMonth);
 }
 
+// ─── Price Event Helpers ──────────────────────────────────────────────────────
+
+/**
+ * For a given year, compute the effective price per unit for each segment,
+ * applying any price events that have taken effect by that year.
+ * Returns a map of segmentId → effective price.
+ */
+function effectivePrices(
+  drug: DrugModel,
+  year: number
+): Record<string, number> {
+  const prices: Record<string, number> = {};
+  for (const seg of drug.segments) {
+    prices[seg.id] = seg.pricePerUnit;
+  }
+
+  for (const event of drug.priceEvents) {
+    const eventYear = parseInt(event.effectiveMonth.split('-')[0], 10);
+    if (eventYear <= year) {
+      if (prices[event.segmentId] !== undefined) {
+        prices[event.segmentId] *= (1 + event.pctChange);
+      }
+    }
+  }
+
+  return prices;
+}
+
+// ─── Opex Helpers ─────────────────────────────────────────────────────────────
+
+function computeAnnualOpex(drug: DrugModel): { smCosts: number; nonSmCosts: number } {
+  const cs = drug.costStructure;
+  const smHC = cs.smHeadcount.reduce((s, l) => s + l.fte * l.costPerFte, 0);
+  const smOther = cs.smOtherCosts.reduce((s, l) => s + l.annualCost, 0);
+  const nonSmHC = cs.nonSmHeadcount.reduce((s, l) => s + l.fte * l.costPerFte, 0);
+  const nonSmOther = cs.nonSmOtherCosts.reduce((s, l) => s + l.annualCost, 0);
+  return {
+    smCosts: smHC + smOther,
+    nonSmCosts: nonSmHC + nonSmOther,
+  };
+}
+
 // ─── Master Forecast Builder ─────────────────────────────────────────────────
 
 export function buildForecast(drug: DrugModel): ForecastPeriod[] {
   const { year: loeYear, month: loeMonth } = parseLoEDate(drug.loeDate);
 
-  // Project annual volumes from first historical year through LOE year + 5 years post
-  const throughYear = loeYear + 5;
-  const allYears = projectVolumes(drug.historicalVolumes, drug.dampeningFactor, throughYear);
+  // Blended dampening = volume-weighted average of per-segment dampening
+  const totalWeight = drug.segments.reduce((s, seg) => s + seg.weight, 0) || 1;
+  const blendedDampening = drug.segments.reduce(
+    (s, seg) => s + (seg.dampeningFactor * seg.weight) / totalWeight,
+    0
+  );
 
-  // The curve to use for post-LOE erosion
+  const throughYear = loeYear + 5;
+  const allYears = projectVolumes(drug.historicalVolumes, blendedDampening, throughYear);
+
   const curve =
     drug.selectedDecayCurveId === 'custom'
       ? { monthlyMultipliers: drug.customDecayCurve }
       : getCurveById(drug.selectedDecayCurveId);
+
+  const { smCosts, nonSmCosts } = computeAnnualOpex(drug);
+  const g2n = drug.costStructure.grossToNetRatio;
 
   const periods: ForecastPeriod[] = [];
 
@@ -81,12 +135,9 @@ export function buildForecast(drug: DrugModel): ForecastPeriod[] {
       brandVolume = units;
       genericVolume = 0;
     } else if (!isPostLOE) {
-      // Pre-LOE projected: full brand
       brandVolume = units;
       genericVolume = 0;
     } else {
-      // Post-LOE: apply annual-average decay
-      // Average the monthly multipliers for the months in this year post-LOE
       const yearStart = monthsBetween(loeYear, loeMonth, year, 1);
       const yearEnd = Math.min(monthsBetween(loeYear, loeMonth, year, 12), 60);
 
@@ -105,15 +156,19 @@ export function buildForecast(drug: DrugModel): ForecastPeriod[] {
       genericVolume = Math.max(0, units - brandVolume);
     }
 
-    // Revenue & GP by segment
+    // Prices adjusted for price events
+    const prices = effectivePrices(drug, year);
+
     const totalVol = brandVolume;
-    let totalRevenue = 0;
+    let totalGrossSales = 0;
     let totalGrossProfit = 0;
+
     const segmentBreakdown = drug.segments.map(seg => {
       const segVol = totalVol * seg.weight;
-      const segRevenue = segVol * seg.pricePerUnit;
-      const segGP = segVol * (seg.pricePerUnit - seg.cogsPerUnit);
-      totalRevenue += segRevenue;
+      const segPrice = prices[seg.id] ?? seg.pricePerUnit;
+      const segRevenue = segVol * segPrice;
+      const segGP = segVol * (segPrice - seg.cogsPerUnit);
+      totalGrossSales += segRevenue;
       totalGrossProfit += segGP;
       return {
         segmentId: seg.id,
@@ -124,7 +179,12 @@ export function buildForecast(drug: DrugModel): ForecastPeriod[] {
       };
     });
 
-    const grossMarginPct = totalRevenue > 0 ? totalGrossProfit / totalRevenue : 0;
+    const grossMarginPct = totalGrossSales > 0 ? totalGrossProfit / totalGrossSales : 0;
+    const netSales = totalGrossSales * g2n;
+    // EBIT = Net Sales − COGS − S&M costs − Non-S&M costs
+    const cogs = totalGrossSales - totalGrossProfit;
+    const ebitCalc = netSales - cogs - smCosts - nonSmCosts;
+    const ebitMarginPct = netSales > 0 ? ebitCalc / netSales : 0;
 
     periods.push({
       label: String(year),
@@ -134,9 +194,14 @@ export function buildForecast(drug: DrugModel): ForecastPeriod[] {
       brandVolume,
       genericVolume,
       totalMoleculeVolume: brandVolume + genericVolume,
-      brandRevenue: totalRevenue,
+      grossSales: totalGrossSales,
+      netSales,
       brandGrossProfit: totalGrossProfit,
       grossMarginPct,
+      smCosts,
+      nonSmCosts,
+      ebit: ebitCalc,
+      ebitMarginPct,
       segmentBreakdown,
     });
   }
@@ -152,13 +217,13 @@ export function computeKPIs(forecast: ForecastPeriod[]) {
   const historical = forecast.filter(p => p.isHistorical);
 
   const peakPreLOERevenue = preLOE.length > 0
-    ? Math.max(...preLOE.map(p => p.brandRevenue))
-    : (historical.length > 0 ? Math.max(...historical.map(p => p.brandRevenue)) : 0);
+    ? Math.max(...preLOE.map(p => p.grossSales))
+    : (historical.length > 0 ? Math.max(...historical.map(p => p.grossSales)) : 0);
 
-  const cumulativePostLOERevenue = postLOE.reduce((s, p) => s + p.brandRevenue, 0);
+  const cumulativePostLOERevenue = postLOE.reduce((s, p) => s + p.grossSales, 0);
 
   const revenueAtRisk = peakPreLOERevenue > 0 && postLOE.length >= 3
-    ? peakPreLOERevenue - (postLOE[2]?.brandRevenue ?? 0)
+    ? peakPreLOERevenue - (postLOE[2]?.grossSales ?? 0)
     : 0;
 
   const avgPostLOEGM = postLOE.length > 0

@@ -80,30 +80,34 @@ export default function BaselineVolumeTab({ drug, onChange, onBack, onNext }: Pr
         </CardContent>
       </Card>
 
-      {/* Dampening Factor */}
+      {/* Per-segment Dampening Factors */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Growth Dampening Factor</CardTitle>
-          <CardDescription>Controls how quickly historical momentum fades. 1.0 = full momentum, 0.5 = 50% of trend.</CardDescription>
+          <CardTitle className="text-base">Growth Dampening Factors</CardTitle>
+          <CardDescription>Controls how quickly historical momentum fades per segment. 1.0 = full momentum, 0.5 = 50% of trend.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Slider
-              value={[drug.dampeningFactor]}
-              min={0.1}
-              max={1.0}
-              step={0.05}
-              onValueChange={([v]) => onChange({ ...drug, dampeningFactor: v })}
-              className="w-48"
-            />
-            <Badge variant="secondary" className="font-mono text-sm tabular-nums">
-              {drug.dampeningFactor.toFixed(2)}
-            </Badge>
-            <div className="flex gap-4 text-xs text-muted-foreground">
-              <span>0.10 — Conservative</span>
-              <span>0.70 — Default</span>
-              <span>1.00 — Full</span>
-            </div>
+          <div className="flex flex-col gap-4">
+            {drug.segments.map((seg, idx) => (
+              <div key={seg.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <span className="text-sm font-medium w-40 flex-shrink-0">{seg.name}</span>
+                <Slider
+                  value={[seg.dampeningFactor]}
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  onValueChange={([v]) => onChange({
+                    ...drug,
+                    segments: drug.segments.map((s, i) => i === idx ? { ...s, dampeningFactor: v } : s),
+                  })}
+                  className="w-48"
+                />
+                <Badge variant="secondary" className="font-mono text-sm tabular-nums w-12 justify-center">
+                  {seg.dampeningFactor.toFixed(2)}
+                </Badge>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">0.10 — Conservative · 0.70 — Default · 1.00 — Full momentum</p>
           </div>
         </CardContent>
       </Card>

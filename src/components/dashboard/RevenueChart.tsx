@@ -15,7 +15,7 @@ function fmtRev(v: number) {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
-  const rev = payload.find((p: any) => p.dataKey === 'brandRevenue');
+  const rev = payload.find((p: any) => p.dataKey === 'grossSales');
   const gp = payload.find((p: any) => p.dataKey === 'brandGrossProfit');
   const gm = (rev?.value ?? 0) > 0 ? ((gp?.value ?? 0) / rev.value * 100).toFixed(1) : '0';
   return (
@@ -43,7 +43,7 @@ export default function RevenueChart({ forecast, loeDate }: Props) {
   const loeYear = loeDate.split('-')[0];
   const data = forecast.map(p => ({
     label: p.label,
-    brandRevenue: Math.round(p.brandRevenue),
+    grossSales: Math.round(p.grossSales),
     brandGrossProfit: Math.round(p.brandGrossProfit),
     isPostLOE: p.isPostLOE, isHistorical: p.isHistorical,
   }));
@@ -71,7 +71,7 @@ export default function RevenueChart({ forecast, loeDate }: Props) {
             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6', opacity: 0.8 }} />
             <ReferenceLine x={loeYear} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1.5}
               label={{ value: 'LOE', position: 'top', fill: '#ef4444', fontSize: 10, fontWeight: 600 }} />
-            <Bar dataKey="brandRevenue" name="Brand Revenue" radius={[3, 3, 0, 0]}>
+            <Bar dataKey="grossSales" name="Brand Revenue" radius={[3, 3, 0, 0]}>
               {data.map((e, i) => (
                 <Cell key={i} fill={e.isHistorical ? '#9ca3af' : '#7a00df'} opacity={e.isPostLOE ? 0.65 : 1} />
               ))}

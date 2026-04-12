@@ -24,11 +24,13 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { LogOutIcon, EllipsisVerticalIcon, LayoutDashboardIcon, SlidersVerticalIcon } from 'lucide-react';
+import { LogOutIcon, EllipsisVerticalIcon, LayoutDashboardIcon, SlidersVerticalIcon, TableIcon, TrendingUpIcon } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboardIcon },
   { to: '/inputs', label: 'Forecast Inputs', Icon: SlidersVerticalIcon },
+  { to: '/sales', label: 'Sales', Icon: TrendingUpIcon },
+  { to: '/pl', label: 'P&L', Icon: TableIcon },
 ];
 
 function formatLoeDate(loeDate: string) {

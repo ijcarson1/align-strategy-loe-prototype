@@ -15,7 +15,13 @@ function formatLoeDate(loeDate: string): string {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { state } = useApp();
   const location = useLocation();
-  const pageTitle = location.pathname === '/dashboard' ? 'Dashboard' : 'Forecast Inputs';
+  const pageTitles: Record<string, string> = {
+    '/dashboard': 'Dashboard',
+    '/inputs': 'Forecast Inputs',
+    '/sales': 'Sales',
+    '/pl': 'P&L',
+  };
+  const pageTitle = pageTitles[location.pathname] ?? 'Dashboard';
   const initials = state.user?.name.split(' ').map(n => n[0]).join('') ?? 'U';
 
   return (

@@ -1,6 +1,6 @@
 # LOE Forecasting Prototype — Development Plan
 
-## Status: Sprint 1 in progress (as of 2026-04-12)
+## Status: Sprint 1 complete (as of 2026-04-12)
 
 ---
 
@@ -135,21 +135,33 @@ Export P&L / Sales tables as CSV. Possibly PDF via `@react-pdf/renderer`.
 
 ---
 
-## Sprint 1 Implementation Order
+## Sprint 1 — COMPLETE
 
-1. **Storage migration** — bump key to `loe_forecast_v2`, add migration in `storage.ts`
-2. **Types** — add `CostStructure`, `HeadcountLine`, `OtherCostLine`, `PriceEvent` to `types/index.ts`; move dampening to segment
-3. **demoData** — update `DEMO_DRUG` with default `costStructure` and empty `priceEvents`
-4. **forecasting.ts** — extend `buildForecast()` for price events, per-segment dampening, net sales + EBIT
-5. **Cost inputs tab** — extend existing `CostInputsTab` with G2N ratio + headcount/other cost lines
-6. **New pages** — `/pl` (P&L table) and `/sales` (Sales by segment) with shadcn `Table`
-7. **Sidebar nav** — add P&L and Sales links
+All items delivered:
+
+1. ✅ **Storage migration** — `loe_forecast_v2` with v1→v2 migration (adds dampening per segment, costStructure, priceEvents)
+2. ✅ **Types** — `CostStructure`, `HeadcountLine`, `OtherCostLine`, `PriceEvent` added; `dampeningFactor` moved to `MarketSegment`
+3. ✅ **demoData** — `DEMO_DRUG` updated with realistic demo `costStructure` (22 FTEs) and empty `priceEvents`
+4. ✅ **forecasting.ts** — per-segment blended dampening, price events applied by month, EBIT = Net Sales − COGS − S&M − Non-S&M
+5. ✅ **Cost inputs tab** — G2N ratio slider, headcount tables (5 S&M + 5 non-S&M), other cost lines (3+3)
+6. ✅ **Price Events tab** — new tab 4 in Inputs; add/remove events per segment with month picker and % impact
+7. ✅ **P&L page** (`/pl`) — full P&L table (Gross Sales → G2N → Net Sales → COGS → GP → Opex → EBIT) with KPI strip and cost breakdowns
+8. ✅ **Sales page** (`/sales`) — stacked bar chart + volume table + revenue table by segment
+9. ✅ **Sidebar nav** — Sales (`TrendingUpIcon`) and P&L (`TableIcon`) added
 
 ---
 
-## Pending Fixes
+## Sprint 2 — Next
 
-- `hsl(var(--...))` in `PostLOEImpactTab` axis tick fills — replace with hex `#6b7280`
+- Volume Events / New SKUs (Priority 3) — `VolumeEvent[]` with launch month, peak share, uptake curve
+- Analog Curves Reference Panel (Priority 5)
+- Scenario Export CSV (Priority 6)
+- UI polish pass: ensure all shadcn components consistent, responsive at all breakpoints
+
+## Known Minor Issues
+
+- `hsl(var(--...))` in `PostLOEImpactTab` area chart gradient — cosmetic only, no functional impact
+- Large bundle (869 kB) — consider code-splitting `/pl` and `/sales` pages in Sprint 2
 
 ---
 
