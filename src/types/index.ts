@@ -6,13 +6,33 @@ export type DecayCurveId =
   | 'reference_pricing'
   | 'custom';
 
+export type CurveType = 'linear' | 'exponential' | 's-curve' | 'rapid' | 'fast' | 'moderate';
+
+export interface VolumeEvent {
+  id: string;
+  description: string;
+  startMonth: string;      // "YYYY-MM"
+  peakErosionPct: number;  // 0–1 (fraction of segment volume eroded at peak)
+  monthsToPeak: number;    // months from start to reach peak erosion
+  curveType: CurveType;
+}
+
+export interface MoleculeExpansion {
+  description: string;
+  startMonth: string;             // "YYYY-MM"
+  peakAdditionalVolume: number;   // absolute units at peak
+  monthsToPeak: number;
+  curveType: CurveType;
+}
+
 export interface MarketSegment {
   id: string;
   name: string;
   weight: number;           // 0.0–1.0, all segments must sum to 1.0
   pricePerUnit: number;     // EUR
   cogsPerUnit: number;      // EUR
-  dampeningFactor: number;  // 0.1–1.0 per segment (was top-level)
+  dampeningFactor: number;  // 0.1–1.0 per segment pre-LOE growth dampening
+  erosionEvents: VolumeEvent[]; // max 3; if empty, global decay curve is used
 }
 
 export interface HistoricalVolume {
@@ -41,34 +61,39 @@ export interface OtherCostLine {
 }
 
 export interface CostStructure {
-  grossToNetRatio: number;       // 0–1, default 0.95
-  smHeadcount: HeadcountLine[];  // Sales & Marketing headcount (5 lines)
-  smOtherCosts: OtherCostLine[]; // S&M other costs (3 lines)
-  nonSmHeadcount: HeadcountLine[]; // Non-S&M headcount (5 lines)
-  nonSmOtherCosts: OtherCostLine[]; // Non-S&M other costs (3 lines)
+  grossToNetRatio: number;
+  smHeadcount: HeadcountLine[];
+  smOtherCosts: OtherCostLine[];
+  nonSmHeadcount: HeadcountLine[];
+  nonSmOtherCosts: OtherCostLine[];
 }
 
 export interface DrugModel {
   drugName: string;
-  loeDate: string;                      // "YYYY-MM" e.g. "2026-01"
-  historicalVolumes: HistoricalVolume[]; // 2018–2025
+  loeDate: string;                      // "YYYY-MM"
+  historicalVolumes: HistoricalVolume[];
   segments: MarketSegment[];
-  selectedDecayCurveId: DecayCurveId;
-  customDecayCurve: number[];           // 61 monthly multipliers, only used if 'custom'
-  priceEvents: PriceEvent[];
+  selectedDecayCurveId: DecayCurveId;   // fallback when no erosionEvents configured
+  customDecayCurve: number[];           // 61 monthly multipliers
+  priceEvents: PriceEvent[];            // post-LOE price events
+  preLOEPriceEvents: PriceEvent[];      // pre-LOE price events
   costStructure: CostStructure;
+  moleculeExpansion?: MoleculeExpansion;
+  brandCaptureOfExpansion: number;      // 0–1, share of expansion volume brand retains
+  forecastApproach: 'statistical' | 'analog';
+  analogCurveId?: string;               // references AnalogCurve.id (Sprint 3)
 }
 
 export interface ForecastPeriod {
-  label: string;                        // "2026", "2027", etc.
+  label: string;
   year: number;
   isPostLOE: boolean;
   isHistorical: boolean;
   brandVolume: number;
   genericVolume: number;
   totalMoleculeVolume: number;
-  grossSales: number;       // was brandRevenue
-  netSales: number;         // grossSales × grossToNetRatio
+  grossSales: number;
+  netSales: number;
   brandGrossProfit: number;
   grossMarginPct: number;
   smCosts: number;

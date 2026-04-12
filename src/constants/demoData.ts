@@ -49,6 +49,16 @@ export const DEMO_DRUG: DrugModel = {
       pricePerUnit: 5.50,
       cogsPerUnit: 1.10,
       dampeningFactor: 0.7,
+      erosionEvents: [
+        {
+          id: 'evt_pub_1',
+          description: 'Generic launch — tender channel',
+          startMonth: '2026-01',
+          peakErosionPct: 0.65,
+          monthsToPeak: 6,
+          curveType: 'rapid',
+        },
+      ],
     },
     {
       id: 'low_private',
@@ -57,6 +67,16 @@ export const DEMO_DRUG: DrugModel = {
       pricePerUnit: 6.40,
       cogsPerUnit: 1.28,
       dampeningFactor: 0.7,
+      erosionEvents: [
+        {
+          id: 'evt_lp_1',
+          description: 'Pharmacy substitution',
+          startMonth: '2026-03',
+          peakErosionPct: 0.50,
+          monthsToPeak: 9,
+          curveType: 'moderate',
+        },
+      ],
     },
     {
       id: 'high_private',
@@ -65,18 +85,39 @@ export const DEMO_DRUG: DrugModel = {
       pricePerUnit: 6.40,
       cogsPerUnit: 1.28,
       dampeningFactor: 0.65,
+      erosionEvents: [],
     },
   ],
   selectedDecayCurveId: 'moderate',
   customDecayCurve: Array.from({ length: 61 }, (_, i) => Math.max(0.25, 1 - (i / 60) * 0.75)),
   priceEvents: [],
+  preLOEPriceEvents: [],
   costStructure: DEFAULT_COST_STRUCTURE,
+  moleculeExpansion: {
+    description: 'OTC label expansion driving new patients',
+    startMonth: '2026-06',
+    peakAdditionalVolume: 8000,
+    monthsToPeak: 18,
+    curveType: 's-curve',
+  },
+  brandCaptureOfExpansion: 0.10,
+  forecastApproach: 'statistical',
 };
 
 export const DEMO_DRUG_ALTERNATE: DrugModel = {
   ...DEMO_DRUG,
-  segments: DEMO_DRUG.segments.map(s => ({ ...s })),
+  segments: DEMO_DRUG.segments.map(s => ({ ...s, erosionEvents: s.erosionEvents.map(e => ({ ...e })) })),
   priceEvents: [],
+  preLOEPriceEvents: [],
   costStructure: { ...DEFAULT_COST_STRUCTURE },
   selectedDecayCurveId: 'rapid',
+  moleculeExpansion: {
+    description: 'OTC label expansion driving new patients',
+    startMonth: '2026-06',
+    peakAdditionalVolume: 5000,
+    monthsToPeak: 24,
+    curveType: 's-curve',
+  },
+  brandCaptureOfExpansion: 0.05,
+  forecastApproach: 'statistical',
 };

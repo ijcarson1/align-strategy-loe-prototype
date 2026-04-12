@@ -1,20 +1,27 @@
 import type { AppState, DrugModel } from '../types';
 
-const STORAGE_KEY = 'loe_forecast_v2';
-const LEGACY_KEY = 'loe_forecast_v1';
+const STORAGE_KEY = 'loe_forecast_v3';
+const LEGACY_KEYS = ['loe_forecast_v2', 'loe_forecast_v1'];
 
 // ─── Migration helpers ────────────────────────────────────────────────────────
 
 function migrateDrug(drug: DrugModel): DrugModel {
-  const defaultDampening = (drug as DrugModel & { dampeningFactor?: number }).dampeningFactor ?? 0.7;
+  const legacy = drug as DrugModel & { dampeningFactor?: number };
+  const defaultDampening = legacy.dampeningFactor ?? 0.7;
 
   return {
     ...drug,
     segments: drug.segments.map(seg => ({
       ...seg,
       dampeningFactor: (seg as typeof seg & { dampeningFactor?: number }).dampeningFactor ?? defaultDampening,
+      erosionEvents: (seg as typeof seg & { erosionEvents?: unknown[] }).erosionEvents ?? [],
     })),
     priceEvents: drug.priceEvents ?? [],
+    preLOEPriceEvents: (drug as DrugModel & { preLOEPriceEvents?: unknown[] }).preLOEPriceEvents ?? [],
+    moleculeExpansion: (drug as DrugModel & { moleculeExpansion?: unknown }).moleculeExpansion ?? undefined,
+    brandCaptureOfExpansion: (drug as DrugModel & { brandCaptureOfExpansion?: number }).brandCaptureOfExpansion ?? 0,
+    forecastApproach: (drug as DrugModel & { forecastApproach?: string }).forecastApproach as 'statistical' | 'analog' ?? 'statistical',
+    analogCurveId: (drug as DrugModel & { analogCurveId?: string }).analogCurveId ?? undefined,
     costStructure: drug.costStructure ?? {
       grossToNetRatio: 0.95,
       smHeadcount: [
@@ -49,7 +56,7 @@ function migrateDrug(drug: DrugModel): DrugModel {
 
 export function saveState(state: Omit<AppState, 'forecast'>): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: 2 }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: 3 }));
   } catch {
     // storage unavailable — silent fail
   }
@@ -57,28 +64,29 @@ export function saveState(state: Omit<AppState, 'forecast'>): void {
 
 export function loadState(): Omit<AppState, 'forecast'> | null {
   try {
-    // Try v2 first
+    // Try current version first
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed.version === 2) return parsed;
+      if (parsed.version === 3) return parsed;
     }
 
-    // Migrate from v1
-    const legacyRaw = localStorage.getItem(LEGACY_KEY);
-    if (legacyRaw) {
+    // Migrate from any legacy version
+    for (const legacyKey of LEGACY_KEYS) {
+      const legacyRaw = localStorage.getItem(legacyKey);
+      if (!legacyRaw) continue;
       const legacy = JSON.parse(legacyRaw);
-      if (legacy.version === 1 && legacy.scenarios) {
+      if (legacy.scenarios) {
         const migrated = {
           ...legacy,
-          version: 2,
+          version: 3,
           scenarios: {
             base: { ...legacy.scenarios.base, drug: migrateDrug(legacy.scenarios.base.drug) },
             alternate: { ...legacy.scenarios.alternate, drug: migrateDrug(legacy.scenarios.alternate.drug) },
           },
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        localStorage.removeItem(LEGACY_KEY);
+        localStorage.removeItem(legacyKey);
         return migrated;
       }
     }
@@ -92,7 +100,7 @@ export function loadState(): Omit<AppState, 'forecast'> | null {
 export function clearState(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_KEY);
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
   } catch {
     // silent
   }

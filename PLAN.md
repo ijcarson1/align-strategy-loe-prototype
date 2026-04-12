@@ -1,176 +1,106 @@
 # LOE Forecasting Prototype — Development Plan
 
-## Status: Sprint 1 complete (as of 2026-04-12)
+## Status: Sprint 2 complete (as of 2026-04-12)
 
 ---
 
 ## What's Built
 
-### Core (complete)
-- **Login page** — two-column layout (shadcn login-02 pattern), demo credentials hint, brand right panel
-- **AppShell** — shadcn dashboard-01 pattern: `SidebarProvider` → `AppSidebar` + `SidebarInset`, collapsible sidebar
-- **Sidebar** — NavUser with DropdownMenu, active route highlighting, drug/LOE display
-- **Dashboard page** — LOE countdown banner, 4 KPI cards, volume chart (stacked bar), revenue chart (bar+line), scenario comparison panel
-- **Inputs page** — 4-tab form: Market Details, Baseline Volume, Post-LOE Impact, Cost Inputs
-- **Forecast engine** — momentum-based pre-LOE growth, decay curve post-LOE erosion, segment revenue/GP
-- **Scenario system** — Base Case + Alternate Case, independently editable, live chart updates
-- **localStorage persistence** — key `loe_forecast_v1`
-
-### Tech stack
+### Stack
 - React 18 + TypeScript, Vite (port 5173: `npm run dev`)
 - Tailwind CSS v4 + shadcn/ui (nova preset, radix base)
 - Recharts for all charts
-- React Router v6: `/` (login), `/dashboard`, `/inputs`
+- React Router v6: `/` login, `/dashboard`, `/inputs`, `/sales`, `/pl`
+- localStorage key `loe_forecast_v3`
+
+### Sprint 1 — complete
+- Login page (shadcn login-02, two-column, 3 demo credential sets)
+- AppShell (dashboard-01: SidebarProvider → AppSidebar + SidebarInset)
+- Sidebar (NavUser dropdown, active route, drug/LOE display, 4 nav items)
+- Dashboard (LOE banner, 4 KPI cards, volume chart, revenue chart, scenario comparison)
+- Inputs page — 5-tab form: Market Details, Baseline Volume, Post-LOE Impact, Price Events, Cost Inputs
+- Forecast engine — momentum pre-LOE, global decay curve post-LOE, segment revenue/GP
+- P&L page — Gross Sales → G2N → Net Sales → COGS → GP → Opex → EBIT
+- Sales page — stacked bar chart + volume/revenue tables by segment
+- Cost inputs — G2N ratio, headcount (S&M + Non-S&M), other costs
+
+### Sprint 2 — complete
+- **Types** — `CurveType`, `VolumeEvent`, `MoleculeExpansion` added; `MarketSegment.erosionEvents[]`; `DrugModel.moleculeExpansion`, `brandCaptureOfExpansion`, `preLOEPriceEvents`, `forecastApproach`, `analogCurveId`
+- **Storage v3** — migration from v2/v1 with safe defaults
+- **Demo data** — BRANDEX with per-segment erosion events (Public: rapid generic launch, Low-income: pharmacy substitution) + molecule expansion (OTC 8k peak, S-curve) + 10% brand capture
+- **Forecast engine** — `computeRampProgress` (6 curve shapes), `computeSegmentRetention` (multiplicative event overlay), `computeExpansionVolumeForYear`; per-segment erosion when configured, global curve as fallback; accepts `analogMultipliers` (Sprint 3)
+- **PostLOEImpactTab** — approach toggle, per-segment erosion event editor (collapsible, ≤3 events), fallback curve selector, blended retention preview chart, molecule expansion card + brand capture slider
+- **PriceEventsTab** — Pre-LOE and Post-LOE sections sharing `PriceEventList` sub-component
 
 ---
 
-## Excel Gap Analysis — Features to Implement
+## Sprint 3 — Next: Analog Page + Multi-Region/Global Roles
 
-Analysed: `LOE Forecasting Tool_02APR26_Example data.xlsm` (15 sheets)
+### Type changes (`src/types/index.ts`)
+- Add `UserRole`, `Region`, `AnalogCurve`, `DrugEntry`
+- `User`: add `role: UserRole`, `regionId?: string`
+- `DrugModel`: add `regionId`, `currency`, `exchangeRateToBase`
+- `AppState`: remove `scenarios`, add `regions`, `drugs: DrugEntry[]`, `activeDrugId`, `analogCurves`, `activeRegionId?`
 
-### Priority 1 — Full P&L with Gross-to-Net + Opex ⬅ Sprint 1
-**Excel sheets**: COSTS, P&L
+### New file: `src/lib/state.ts`
+- `getActiveDrug(state)` — returns active `DrugEntry`
+- `getVisibleDrugs(state)` — global: all or filtered by `activeRegionId`; regional: only their region
 
-P&L flow:
-```
-Gross Sales
-× Gross-to-Net ratio (default 0.95)
-= Net Sales
-− COGS
-= Gross Profit
-− S&M costs (headcount + other)
-− Non-S&M costs (headcount + other)
-= EBIT
-```
+### Storage → v4
+- Wrap existing `scenarios` into `DrugEntry`, initialize `drugs[]`, `regions`, `analogCurves`
 
-Types to add to `DrugModel`:
-```typescript
-interface HeadcountLine {
-  id: string;
-  name: string;       // e.g. "Sales Reps", "MSLs"
-  fte: number;
-  costPerFte: number; // annual €
-}
+### Auth (`src/constants/auth.ts`)
+- Replace single user with `DEMO_USERS[]`:
+  - `demo@alignstrategy.com` → global
+  - `nordic@alignstrategy.com` → regional, regionId: 'nordics'
+  - `uk@alignstrategy.com` → regional, regionId: 'uk'
 
-interface OtherCostLine {
-  id: string;
-  name: string;
-  annualCost: number;
-}
+### Demo data (`src/constants/demoData.ts`)
+- `DEMO_REGIONS[]` — Nordics/DKK, UK/GBP, Germany/EUR
+- `BRANDEX_UK` drug model
+- `DEMO_DRUG_ENTRIES[]` — two drugs for global user's portfolio
 
-interface CostStructure {
-  grossToNetRatio: number;          // 0–1, default 0.95
-  smHeadcount: HeadcountLine[];     // 5 lines (Sales Reps, MSLs, KAMs, Marketing, Other)
-  smOtherCosts: OtherCostLine[];    // 3 lines
-  nonSmHeadcount: HeadcountLine[];  // 5 lines (Medical, Regulatory, Finance, HR, Other)
-  nonSmOtherCosts: OtherCostLine[]; // 3 lines
-}
-```
+### Context refactor (`src/context/AppContext.tsx`)
+- New actions: `SET_ACTIVE_DRUG`, `SET_ACTIVE_REGION`, `ADD/UPDATE/REMOVE_ANALOG_CURVE`
+- `UPDATE_DRUG` targets `state.drugs` by `activeDrugId`
+- Context value: `setActiveDrug`, `setActiveRegion`, `addAnalogCurve`, etc.
 
-Add `costStructure: CostStructure` to `DrugModel`.
+### Update all page consumers
+- Replace `state.scenarios[scenario].drug` → `getActiveDrug(state)?.scenarios[scenario].drug`
+- In: `DashboardPage`, `InputsPage`, `PLPage`, `SalesPage`, `AppShell`, `Sidebar`
 
-Extend `ForecastPeriod`:
-```typescript
-netSales: number;
-smCosts: number;
-nonSmCosts: number;
-ebit: number;
-ebitMarginPct: number;
-```
+### New pages
+- `/analog` — analog library (key-point input → 61-value interpolation), comparison chart (base/alternate + analogs), "use as basis" callout
+- `/portfolio` — global users only; table of all drugs with KPIs; `setActiveDrug` + navigate to dashboard
 
-New routes: `/pl` (P&L table) and `/sales` (Sales by segment table) — add to sidebar.
-
-### Priority 2 — Price Events ⬅ Sprint 1
-**Excel sheet**: INPUT (up to 4 price events per segment, each with month + % impact)
-
-```typescript
-interface PriceEvent {
-  id: string;
-  segmentId: string;
-  effectiveMonth: string; // "YYYY-MM"
-  pctChange: number;      // e.g. -0.05 = −5%
-}
-```
-
-Add `priceEvents: PriceEvent[]` to `DrugModel`.
-Extend `buildForecast()` to apply cumulative price adjustments from event month onward.
-
-### Priority 3 — Volume Events / New SKUs ⬅ Sprint 2
-**Excel sheet**: Data Input (New SKU section with launch month, peak share, uptake curve, per-scenario toggle)
-
-```typescript
-interface VolumeEvent {
-  id: string;
-  name: string;
-  launchMonth: string;    // "YYYY-MM"
-  peakSharePct: number;   // 0–1, share of total molecule volume at peak
-  uptakeCurveId: string;  // references one of the decay curves used in reverse
-  includeInBase: boolean;
-  includeInAlternate: boolean;
-}
-```
-
-Add `volumeEvents: VolumeEvent[]` to `DrugModel`.
-
-### Priority 4 — Per-Segment Dampening Factors ⬅ Sprint 1 (quick win)
-**Excel sheet**: INPUT (separate dampening per segment: 0.5–0.8)
-
-Move `dampeningFactor` from top-level `DrugModel` to `MarketSegment`:
-```typescript
-interface MarketSegment {
-  ...
-  dampeningFactor: number; // was top-level
-}
-```
-
-Update `buildForecast()` and all input UI.
-
-### Priority 5 — Analog Curves Reference Panel ⬅ Sprint 2
-**Excel sheet**: ANALOG (static dataset of 3–5 analog molecules for benchmarking decay)
-
-Static reference data, no user input. Display in Post-LOE Impact tab or a new `/analogs` page.
-
-### Priority 6 — Scenario Export ⬅ Sprint 3
-Export P&L / Sales tables as CSV. Possibly PDF via `@react-pdf/renderer`.
+### Sidebar changes
+- Drug switcher (when `visibleDrugs.length > 1`)
+- Region filter (global users only)
+- "Analogs" nav item
+- "Portfolio" nav item (global only)
 
 ---
 
-## Sprint 1 — COMPLETE
+## Sprint 4 — FX + Scenario Clone + Polish
 
-All items delivered:
-
-1. ✅ **Storage migration** — `loe_forecast_v2` with v1→v2 migration (adds dampening per segment, costStructure, priceEvents)
-2. ✅ **Types** — `CostStructure`, `HeadcountLine`, `OtherCostLine`, `PriceEvent` added; `dampeningFactor` moved to `MarketSegment`
-3. ✅ **demoData** — `DEMO_DRUG` updated with realistic demo `costStructure` (22 FTEs) and empty `priceEvents`
-4. ✅ **forecasting.ts** — per-segment blended dampening, price events applied by month, EBIT = Net Sales − COGS − S&M − Non-S&M
-5. ✅ **Cost inputs tab** — G2N ratio slider, headcount tables (5 S&M + 5 non-S&M), other cost lines (3+3)
-6. ✅ **Price Events tab** — new tab 4 in Inputs; add/remove events per segment with month picker and % impact
-7. ✅ **P&L page** (`/pl`) — full P&L table (Gross Sales → G2N → Net Sales → COGS → GP → Opex → EBIT) with KPI strip and cost breakdowns
-8. ✅ **Sales page** (`/sales`) — stacked bar chart + volume table + revenue table by segment
-9. ✅ **Sidebar nav** — Sales (`TrendingUpIcon`) and P&L (`TableIcon`) added
+- `ForecastPeriod`: add `grossSalesBase`, `netSalesBase`, `ebitBase` (÷ exchangeRateToBase)
+- `AppState`: add `showBaseCurrency: boolean`
+- New hook `src/hooks/useCurrencyFormat.ts` — used by PLPage and SalesPage
+- `CLONE_SCENARIO` reducer action + "Copy Base → Alternate" button with AlertDialog
+- Portfolio always shows EUR base values
+- Dashboard: drug name + region badge, "View Portfolio →" CTA for global users
 
 ---
 
-## Sprint 2 — Next
-
-- Volume Events / New SKUs (Priority 3) — `VolumeEvent[]` with launch month, peak share, uptake curve
-- Analog Curves Reference Panel (Priority 5)
-- Scenario Export CSV (Priority 6)
-- UI polish pass: ensure all shadcn components consistent, responsive at all breakpoints
-
-## Known Minor Issues
-
-- `hsl(var(--...))` in `PostLOEImpactTab` area chart gradient — cosmetic only, no functional impact
-- Large bundle (869 kB) — consider code-splitting `/pl` and `/sales` pages in Sprint 2
-
----
-
-## Key Constants
+## Key constants
 
 | Item | Value |
-|------|-------|
-| Demo login | `demo@alignstrategy.com` / `Pharma2026!` |
+|---|---|
+| Demo login (global) | `demo@alignstrategy.com` / `Pharma2026!` |
+| Demo login (nordic) | `nordic@alignstrategy.com` / `Pharma2026!` |
+| Demo login (UK) | `uk@alignstrategy.com` / `Pharma2026!` |
 | Brand purple | `#7a00df` → `oklch(0.42 0.26 292)` |
 | Sidebar charcoal | `#313131` → `oklch(0.245 0 0)` |
-| Storage key | `loe_forecast_v2` (after migration) |
-| Chart hex colors | brand `#7a00df`, generic `#c084fc`, historical `#9ca3af`, grid `#e5e7eb`, LOE line `#ef4444`, GP line `#10b981` |
+| Storage key | `loe_forecast_v3` (v4 after Sprint 3) |
+| Chart hex colors | brand `#7a00df`, generic `#c084fc`, hist `#9ca3af`, grid `#e5e7eb`, LOE `#ef4444`, GP `#10b981` |
+| Segment colors (Sales) | `#7a00df`, `#c084fc`, `#a855f7`, `#9333ea`, `#7c3aed` |
