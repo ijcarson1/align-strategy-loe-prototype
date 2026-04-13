@@ -1,4 +1,5 @@
 import { useApp } from '../context/AppContext';
+import { getActiveDrug } from '../lib/state';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,10 @@ const SEG_COLORS = ['#7a00df', '#c084fc', '#a855f7', '#9333ea', '#7c3aed'];
 export default function SalesPage() {
   const { state } = useApp();
   const forecast = state.forecast[state.activeScenario];
-  const drug = state.scenarios[state.activeScenario].drug;
+  const entry = getActiveDrug(state);
+  const drug = entry?.scenarios[state.activeScenario].drug;
+
+  if (!drug) return null;
 
   const periods = forecast.filter(p => !p.isHistorical);
   const loeYear = parseInt(drug.loeDate.split('-')[0], 10);

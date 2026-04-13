@@ -1,6 +1,6 @@
 # LOE Forecasting Prototype — Development Plan
 
-## Status: Sprint 2 complete (as of 2026-04-12)
+## Status: Sprint 3 complete (as of 2026-04-12)
 
 ---
 
@@ -25,6 +25,23 @@
 - Cost inputs — G2N ratio, headcount (S&M + Non-S&M), other costs
 
 ### Sprint 2 — complete
+### Sprint 3 — complete
+
+- **Types** — `UserRole`, `Region`, `AnalogCurve`, `DrugEntry` added; `User` gains `role`/`regionId`; `DrugModel` gains `regionId`, `currency`, `currencySymbol`, `exchangeRateToBase`; `AppState` replaces `scenarios` with `drugs: DrugEntry[]`, `activeDrugId`, `regions`, `analogCurves`, `activeRegionId?`
+- **Storage v4** — migration from v3/v2/v1; wraps legacy `scenarios` into a `DrugEntry`
+- **Auth** — `DEMO_USERS[]` array: global (`demo@`), Nordics regional (`nordic@`), UK regional (`uk@`); all `Pharma2026!`
+- **Demo data** — `DEMO_REGIONS` (Nordics/DKK, UK/GBP, Germany/EUR); `BRANDEX_UK` drug model (LOE 2027-06, NHS + Private segments); `DEMO_DRUG_ENTRIES[]` with 2 drugs for global portfolio
+- **lib/state.ts** — `getActiveDrug(state)`, `getVisibleDrugs(state)` (role-aware)
+- **Context** — full refactor: `UPDATE_DRUG` targets `drugs[]` by `activeDrugId`; new actions `SET_ACTIVE_DRUG`, `SET_ACTIVE_REGION`, `ADD/UPDATE/REMOVE_ANALOG_CURVE`; analog multipliers resolved automatically for `forecastApproach === 'analog'`; merged drug list preserves saved edits + fills missing demo entries
+- **Page consumers** — all `state.scenarios` refs replaced with `getActiveDrug(state)` in Dashboard, Inputs, PL, Sales, AppShell, Sidebar
+- **AnalogPage** (`/analog`) — analog library (up to 4 named curves, key-point input at M0/6/12/18/24/36/48/60 → 61-point interpolation), retention comparison LineChart with per-curve visibility toggles, usage callout
+- **PortfolioPage** (`/portfolio`) — global users only; table of all visible drugs (both scenarios) with peak revenue / 5-yr revenue / 5-yr EBIT in local currency; region filter; Open button switches active drug + navigates to dashboard
+- **Sidebar** — drug switcher Select (when visibleDrugs > 1), region filter Select (global only), Analogs + Portfolio nav items
+- **LoginPage** — shows all 3 credential sets with role labels
+
+---
+
+### Sprint 2 — complete
 - **Types** — `CurveType`, `VolumeEvent`, `MoleculeExpansion` added; `MarketSegment.erosionEvents[]`; `DrugModel.moleculeExpansion`, `brandCaptureOfExpansion`, `preLOEPriceEvents`, `forecastApproach`, `analogCurveId`
 - **Storage v3** — migration from v2/v1 with safe defaults
 - **Demo data** — BRANDEX with per-segment erosion events (Public: rapid generic launch, Low-income: pharmacy substitution) + molecule expansion (OTC 8k peak, S-curve) + 10% brand capture
@@ -34,7 +51,7 @@
 
 ---
 
-## Sprint 3 — Next: Analog Page + Multi-Region/Global Roles
+## Sprint 3 — Complete: Analog Page + Multi-Region/Global Roles
 
 ### Type changes (`src/types/index.ts`)
 - Add `UserRole`, `Region`, `AnalogCurve`, `DrugEntry`

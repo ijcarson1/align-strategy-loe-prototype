@@ -6,6 +6,8 @@ import DashboardPage from './pages/DashboardPage';
 import InputsPage from './pages/InputsPage';
 import PLPage from './pages/PLPage';
 import SalesPage from './pages/SalesPage';
+import AnalogPage from './pages/AnalogPage';
+import PortfolioPage from './pages/PortfolioPage';
 import AppShell from './components/layout/AppShell';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -28,6 +30,8 @@ function AppRoutes() {
       <Route path="/inputs" element={<ProtectedRoute><InputsPage /></ProtectedRoute>} />
       <Route path="/pl" element={<ProtectedRoute><PLPage /></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+      <Route path="/analog" element={<ProtectedRoute><AnalogPage /></ProtectedRoute>} />
+      <Route path="/portfolio" element={<ProtectedRoute><PortfolioPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

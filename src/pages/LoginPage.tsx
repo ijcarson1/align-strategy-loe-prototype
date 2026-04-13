@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { DEMO_CREDENTIALS } from '../constants/auth';
+import { DEMO_USERS } from '../constants/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldGroup, FieldLabel, FieldError } from '@/components/ui/field';
@@ -87,10 +87,19 @@ export default function LoginPage() {
                 </Field>
               </FieldGroup>
 
-              <div className="rounded-lg border border-primary/20 bg-accent/30 p-3 text-xs">
-                <p className="font-semibold text-primary mb-1">Demo credentials</p>
-                <p className="text-muted-foreground">Email: <span className="font-mono text-foreground">{DEMO_CREDENTIALS.email}</span></p>
-                <p className="text-muted-foreground">Password: <span className="font-mono text-foreground">{DEMO_CREDENTIALS.password}</span></p>
+              <div className="rounded-lg border border-primary/20 bg-accent/30 p-3 text-xs space-y-2">
+                <p className="font-semibold text-primary">Demo credentials</p>
+                {DEMO_USERS.map(u => (
+                  <div key={u.email} className="space-y-0.5">
+                    <p className="text-muted-foreground font-mono text-[11px]">{u.email}</p>
+                    <p className="text-muted-foreground">
+                      <span className="font-mono text-foreground">{u.password}</span>
+                      <span className="ml-2 text-muted-foreground/70">
+                        {u.user.role === 'global' ? '· Global' : `· ${u.user.company}`}
+                      </span>
+                    </p>
+                  </div>
+                ))}
               </div>
             </form>
           </div>

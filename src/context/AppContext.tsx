@@ -1,24 +1,32 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import type { AppState, DrugModel, User } from '../types';
-import { DEMO_CREDENTIALS, DEMO_USER } from '../constants/auth';
-import { DEMO_DRUG, DEMO_DRUG_ALTERNATE } from '../constants/demoData';
+import type { AppState, DrugModel, User, AnalogCurve } from '../types';
+import { DEMO_USERS } from '../constants/auth';
+import { DEMO_DRUG_ENTRIES, DEMO_REGIONS } from '../constants/demoData';
 import { buildForecast } from '../lib/forecasting';
+import { getActiveDrug } from '../lib/state';
 import { saveState, loadState, clearState } from '../lib/storage';
 
 // ─── Initial State ────────────────────────────────────────────────────────────
+
+function buildDefaultForecast(drugs: typeof DEMO_DRUG_ENTRIES, activeDrugId: string) {
+  const entry = drugs.find(d => d.id === activeDrugId);
+  if (!entry) return { base: [], alternate: [] };
+  return {
+    base: buildForecast(entry.scenarios.base.drug),
+    alternate: buildForecast(entry.scenarios.alternate.drug),
+  };
+}
 
 const DEFAULT_STATE: AppState = {
   isAuthenticated: false,
   user: null,
   activeScenario: 'base',
-  scenarios: {
-    base: { id: 'base', label: 'Base Case', drug: DEMO_DRUG },
-    alternate: { id: 'alternate', label: 'Alternate Case', drug: DEMO_DRUG_ALTERNATE },
-  },
-  forecast: {
-    base: buildForecast(DEMO_DRUG),
-    alternate: buildForecast(DEMO_DRUG_ALTERNATE),
-  },
+  drugs: DEMO_DRUG_ENTRIES,
+  activeDrugId: 'drug_1',
+  regions: DEMO_REGIONS,
+  analogCurves: [],
+  activeRegionId: undefined,
+  forecast: buildDefaultForecast(DEMO_DRUG_ENTRIES, 'drug_1'),
 };
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -28,7 +36,33 @@ type Action =
   | { type: 'LOGOUT' }
   | { type: 'UPDATE_DRUG'; scenario: 'base' | 'alternate'; drug: DrugModel }
   | { type: 'SET_ACTIVE_SCENARIO'; scenario: 'base' | 'alternate' }
+  | { type: 'SET_ACTIVE_DRUG'; drugId: string }
+  | { type: 'SET_ACTIVE_REGION'; regionId: string | undefined }
+  | { type: 'ADD_ANALOG_CURVE'; curve: AnalogCurve }
+  | { type: 'UPDATE_ANALOG_CURVE'; curve: AnalogCurve }
+  | { type: 'REMOVE_ANALOG_CURVE'; curveId: string }
   | { type: 'LOAD_FROM_STORAGE'; state: Omit<AppState, 'forecast'> };
+
+// ─── Forecast rebuilder ───────────────────────────────────────────────────────
+
+function rebuildForecast(state: AppState): AppState['forecast'] {
+  const entry = getActiveDrug(state);
+  if (!entry) return { base: [], alternate: [] };
+  const baseDrug = entry.scenarios.base.drug;
+  const altDrug = entry.scenarios.alternate.drug;
+
+  // Resolve analog multipliers if forecastApproach === 'analog'
+  const resolveAnalog = (drug: DrugModel): number[] | undefined => {
+    if (drug.forecastApproach !== 'analog' || !drug.analogCurveId) return undefined;
+    const curve = state.analogCurves.find(c => c.id === drug.analogCurveId);
+    return curve?.monthlyRetention;
+  };
+
+  return {
+    base: buildForecast(baseDrug, resolveAnalog(baseDrug)),
+    alternate: buildForecast(altDrug, resolveAnalog(altDrug)),
+  };
+}
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
@@ -41,34 +75,52 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...DEFAULT_STATE, isAuthenticated: false, user: null };
 
     case 'UPDATE_DRUG': {
-      const updatedScenarios = {
-        ...state.scenarios,
-        [action.scenario]: {
-          ...state.scenarios[action.scenario],
-          drug: action.drug,
-        },
-      };
-      return {
-        ...state,
-        scenarios: updatedScenarios,
-        forecast: {
-          ...state.forecast,
-          [action.scenario]: buildForecast(action.drug),
-        },
-      };
+      const updatedDrugs = state.drugs.map(entry => {
+        if (entry.id !== state.activeDrugId) return entry;
+        return {
+          ...entry,
+          scenarios: {
+            ...entry.scenarios,
+            [action.scenario]: {
+              ...entry.scenarios[action.scenario],
+              drug: action.drug,
+            },
+          },
+        };
+      });
+      const next = { ...state, drugs: updatedDrugs };
+      return { ...next, forecast: rebuildForecast(next) };
     }
 
     case 'SET_ACTIVE_SCENARIO':
       return { ...state, activeScenario: action.scenario };
 
-    case 'LOAD_FROM_STORAGE':
-      return {
-        ...action.state,
-        forecast: {
-          base: buildForecast(action.state.scenarios.base.drug),
-          alternate: buildForecast(action.state.scenarios.alternate.drug),
-        },
-      };
+    case 'SET_ACTIVE_DRUG': {
+      const next = { ...state, activeDrugId: action.drugId };
+      return { ...next, forecast: rebuildForecast(next) };
+    }
+
+    case 'SET_ACTIVE_REGION':
+      return { ...state, activeRegionId: action.regionId };
+
+    case 'ADD_ANALOG_CURVE':
+      return { ...state, analogCurves: [...state.analogCurves, action.curve] };
+
+    case 'UPDATE_ANALOG_CURVE': {
+      const curves = state.analogCurves.map(c => c.id === action.curve.id ? action.curve : c);
+      const next = { ...state, analogCurves: curves };
+      return { ...next, forecast: rebuildForecast(next) };
+    }
+
+    case 'REMOVE_ANALOG_CURVE': {
+      const curves = state.analogCurves.filter(c => c.id !== action.curveId);
+      return { ...state, analogCurves: curves };
+    }
+
+    case 'LOAD_FROM_STORAGE': {
+      const next = { ...action.state };
+      return { ...next, forecast: rebuildForecast(next as AppState) };
+    }
 
     default:
       return state;
@@ -83,6 +135,11 @@ interface AppContextValue {
   logout: () => void;
   updateDrug: (scenario: 'base' | 'alternate', drug: DrugModel) => void;
   setActiveScenario: (scenario: 'base' | 'alternate') => void;
+  setActiveDrug: (drugId: string) => void;
+  setActiveRegion: (regionId: string | undefined) => void;
+  addAnalogCurve: (curve: AnalogCurve) => void;
+  updateAnalogCurve: (curve: AnalogCurve) => void;
+  removeAnalogCurve: (curveId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -91,29 +148,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, DEFAULT_STATE, (initial) => {
     const saved = loadState();
     if (saved) {
-      return {
-        ...saved,
-        forecast: {
-          base: buildForecast(saved.scenarios.base.drug),
-          alternate: buildForecast(saved.scenarios.alternate.drug),
-        },
-      };
+      // Merge saved drugs with demo entries: prefer saved, fill in any missing demo entries
+      const savedDrugIds = new Set(saved.drugs.map((d: { id: string }) => d.id));
+      const mergedDrugs = [
+        ...saved.drugs,
+        ...DEMO_DRUG_ENTRIES.filter(d => !savedDrugIds.has(d.id)),
+      ];
+      const merged = { ...saved, drugs: mergedDrugs, regions: DEMO_REGIONS };
+      return { ...merged, forecast: rebuildForecast(merged as AppState) };
     }
     return initial;
   });
 
-  // Persist on every state change (excluding forecast which is derived)
+  // Persist on every state change (excluding derived forecast)
   useEffect(() => {
     const { forecast: _forecast, ...toSave } = state;
     saveState(toSave);
   }, [state]);
 
   const login = useCallback((email: string, password: string): boolean => {
-    if (
-      email.trim().toLowerCase() === DEMO_CREDENTIALS.email &&
-      password === DEMO_CREDENTIALS.password
-    ) {
-      dispatch({ type: 'LOGIN', user: DEMO_USER });
+    const match = DEMO_USERS.find(
+      u => u.email === email.trim().toLowerCase() && u.password === password
+    );
+    if (match) {
+      dispatch({ type: 'LOGIN', user: match.user });
       return true;
     }
     return false;
@@ -132,8 +190,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_ACTIVE_SCENARIO', scenario });
   }, []);
 
+  const setActiveDrug = useCallback((drugId: string) => {
+    dispatch({ type: 'SET_ACTIVE_DRUG', drugId });
+  }, []);
+
+  const setActiveRegion = useCallback((regionId: string | undefined) => {
+    dispatch({ type: 'SET_ACTIVE_REGION', regionId });
+  }, []);
+
+  const addAnalogCurve = useCallback((curve: AnalogCurve) => {
+    dispatch({ type: 'ADD_ANALOG_CURVE', curve });
+  }, []);
+
+  const updateAnalogCurve = useCallback((curve: AnalogCurve) => {
+    dispatch({ type: 'UPDATE_ANALOG_CURVE', curve });
+  }, []);
+
+  const removeAnalogCurve = useCallback((curveId: string) => {
+    dispatch({ type: 'REMOVE_ANALOG_CURVE', curveId });
+  }, []);
+
   return (
-    <AppContext.Provider value={{ state, login, logout, updateDrug, setActiveScenario }}>
+    <AppContext.Provider value={{
+      state, login, logout, updateDrug, setActiveScenario,
+      setActiveDrug, setActiveRegion,
+      addAnalogCurve, updateAnalogCurve, removeAnalogCurve,
+    }}>
       {children}
     </AppContext.Provider>
   );

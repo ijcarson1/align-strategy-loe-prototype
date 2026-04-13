@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { getActiveDrug } from '../lib/state';
 import { computeKPIs } from '../lib/forecasting';
 import { getCurveById } from '../constants/decayCurves';
 import { Button } from '@/components/ui/button';
@@ -30,10 +31,17 @@ export default function DashboardPage() {
   const { state, setActiveScenario } = useApp();
   const navigate = useNavigate();
   const activeForecast = state.forecast[state.activeScenario];
-  const drug = state.scenarios[state.activeScenario].drug;
+  const entry = getActiveDrug(state);
+  const drug = entry?.scenarios[state.activeScenario].drug;
   const kpis = computeKPIs(activeForecast);
-  const curve = getCurveById(drug.selectedDecayCurveId);
-  const isPast = new Date(drug.loeDate.split('-').map(Number)[0], drug.loeDate.split('-').map(Number)[1] - 1, 1) < new Date();
+  const curve = drug ? getCurveById(drug.selectedDecayCurveId) : getCurveById('moderate');
+  const isPast = drug
+    ? new Date(drug.loeDate.split('-').map(Number)[0], drug.loeDate.split('-').map(Number)[1] - 1, 1) < new Date()
+    : false;
+
+  const region = state.regions.find(r => r.id === entry?.regionId);
+
+  if (!drug) return null;
 
   return (
     <div className="flex flex-col gap-6 py-6">
@@ -48,8 +56,15 @@ export default function DashboardPage() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/50">Loss of Exclusivity</p>
-              <p className="text-xl font-bold mt-0.5">{formatLoeDate(drug.loeDate)}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-sidebar-foreground/50">Loss of Exclusivity</p>
+                {region && (
+                  <Badge className="text-[10px] bg-primary/20 text-primary-foreground border-0 py-0">
+                    {region.name}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xl font-bold mt-0.5">{drug.drugName} · {formatLoeDate(drug.loeDate)}</p>
             </div>
           </div>
           <div className="flex items-center gap-6 flex-wrap">
@@ -90,6 +105,11 @@ export default function DashboardPage() {
         <Badge variant="outline" className="text-xs text-muted-foreground hidden sm:inline-flex">
           Switch to compare scenarios
         </Badge>
+        {state.user?.role === 'global' && (
+          <Button size="sm" variant="ghost" className="ml-auto text-xs" onClick={() => navigate('/portfolio')}>
+            View Portfolio →
+          </Button>
+        )}
       </div>
 
       <div className="px-4 lg:px-6">
@@ -104,10 +124,10 @@ export default function DashboardPage() {
         <ScenarioPanel
           baseForecast={state.forecast.base}
           alternateForecast={state.forecast.alternate}
-          baseLabel={state.scenarios.base.label}
-          alternateLabel={state.scenarios.alternate.label}
-          baseCurve={getCurveById(state.scenarios.base.drug.selectedDecayCurveId)}
-          alternateCurve={getCurveById(state.scenarios.alternate.drug.selectedDecayCurveId)}
+          baseLabel={entry.scenarios.base.label}
+          alternateLabel={entry.scenarios.alternate.label}
+          baseCurve={getCurveById(entry.scenarios.base.drug.selectedDecayCurveId)}
+          alternateCurve={getCurveById(entry.scenarios.alternate.drug.selectedDecayCurveId)}
         />
       </div>
 

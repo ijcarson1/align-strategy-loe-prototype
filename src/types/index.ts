@@ -8,6 +8,8 @@ export type DecayCurveId =
 
 export type CurveType = 'linear' | 'exponential' | 's-curve' | 'rapid' | 'fast' | 'moderate';
 
+export type UserRole = 'global' | 'regional';
+
 export interface VolumeEvent {
   id: string;
   description: string;
@@ -29,8 +31,8 @@ export interface MarketSegment {
   id: string;
   name: string;
   weight: number;           // 0.0–1.0, all segments must sum to 1.0
-  pricePerUnit: number;     // EUR
-  cogsPerUnit: number;      // EUR
+  pricePerUnit: number;     // local currency
+  cogsPerUnit: number;      // local currency
   dampeningFactor: number;  // 0.1–1.0 per segment pre-LOE growth dampening
   erosionEvents: VolumeEvent[]; // max 3; if empty, global decay curve is used
 }
@@ -51,13 +53,13 @@ export interface HeadcountLine {
   id: string;
   name: string;
   fte: number;
-  costPerFte: number; // annual EUR
+  costPerFte: number; // annual local currency
 }
 
 export interface OtherCostLine {
   id: string;
   name: string;
-  annualCost: number; // EUR
+  annualCost: number; // local currency
 }
 
 export interface CostStructure {
@@ -66,6 +68,21 @@ export interface CostStructure {
   smOtherCosts: OtherCostLine[];
   nonSmHeadcount: HeadcountLine[];
   nonSmOtherCosts: OtherCostLine[];
+}
+
+export interface Region {
+  id: string;
+  name: string;
+  currency: string;          // ISO code e.g. "EUR", "GBP", "DKK"
+  currencySymbol: string;    // e.g. "€", "£", "kr"
+  exchangeRateToBase: number; // 1 local unit = N EUR
+}
+
+export interface AnalogCurve {
+  id: string;
+  name: string;
+  description?: string;
+  monthlyRetention: number[]; // 61 values (month 0–60 post-LOE)
 }
 
 export interface DrugModel {
@@ -81,7 +98,11 @@ export interface DrugModel {
   moleculeExpansion?: MoleculeExpansion;
   brandCaptureOfExpansion: number;      // 0–1, share of expansion volume brand retains
   forecastApproach: 'statistical' | 'analog';
-  analogCurveId?: string;               // references AnalogCurve.id (Sprint 3)
+  analogCurveId?: string;               // references AnalogCurve.id
+  regionId: string;                     // references Region.id
+  currency: string;                     // ISO code (denormalized for convenience)
+  currencySymbol: string;               // e.g. "€"
+  exchangeRateToBase: number;           // 1 local unit = N EUR
 }
 
 export interface ForecastPeriod {
@@ -115,21 +136,33 @@ export interface Scenario {
   drug: DrugModel;
 }
 
+export interface DrugEntry {
+  id: string;
+  regionId: string;
+  scenarios: {
+    base: Scenario;
+    alternate: Scenario;
+  };
+}
+
 export interface User {
   email: string;
   name: string;
   company: string;
   title: string;
+  role: UserRole;
+  regionId?: string; // only set for regional users
 }
 
 export interface AppState {
   isAuthenticated: boolean;
   user: User | null;
   activeScenario: 'base' | 'alternate';
-  scenarios: {
-    base: Scenario;
-    alternate: Scenario;
-  };
+  drugs: DrugEntry[];
+  activeDrugId: string;
+  regions: Region[];
+  analogCurves: AnalogCurve[];
+  activeRegionId?: string; // global user region filter
   forecast: {
     base: ForecastPeriod[];
     alternate: ForecastPeriod[];

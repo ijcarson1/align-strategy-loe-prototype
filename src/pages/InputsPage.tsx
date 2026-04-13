@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { getActiveDrug } from '../lib/state';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import MarketDetailsTab from '../components/inputs/tabs/MarketDetailsTab';
 import BaselineVolumeTab from '../components/inputs/tabs/BaselineVolumeTab';
@@ -19,10 +20,13 @@ export default function InputsPage() {
   const [activeTab, setActiveTab] = useState('market');
   const { state, updateDrug } = useApp();
   const scenario = state.activeScenario;
-  const drug = state.scenarios[scenario].drug;
+  const entry = getActiveDrug(state);
+  const drug = entry?.scenarios[scenario].drug;
 
   const tabOrder = TABS.map(t => t.value);
   const currentIdx = tabOrder.indexOf(activeTab);
+
+  if (!drug) return null;
 
   return (
     <div className="h-full flex flex-col">

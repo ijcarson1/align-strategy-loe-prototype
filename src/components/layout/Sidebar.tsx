@@ -1,5 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { getActiveDrug, getVisibleDrugs } from '../../lib/state';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -10,6 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   Sidebar,
   SidebarContent,
@@ -24,20 +28,23 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { LogOutIcon, EllipsisVerticalIcon, LayoutDashboardIcon, SlidersVerticalIcon, TableIcon, TrendingUpIcon } from 'lucide-react';
-
-const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboardIcon },
-  { to: '/inputs', label: 'Forecast Inputs', Icon: SlidersVerticalIcon },
-  { to: '/sales', label: 'Sales', Icon: TrendingUpIcon },
-  { to: '/pl', label: 'P&L', Icon: TableIcon },
-];
+import {
+  LogOutIcon, EllipsisVerticalIcon,
+  LayoutDashboardIcon, SlidersVerticalIcon, TableIcon, TrendingUpIcon,
+  GitCompareArrowsIcon, LayoutGridIcon,
+} from 'lucide-react';
 
 function formatLoeDate(loeDate: string) {
   const [year, month] = loeDate.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[parseInt(month) - 1]} ${year}`;
 }
+
+const REGION_COLORS: Record<string, string> = {
+  nordics: 'bg-blue-500/20 text-blue-300',
+  uk:      'bg-green-500/20 text-green-300',
+  germany: 'bg-yellow-500/20 text-yellow-300',
+};
 
 function NavUser() {
   const { state, logout } = useApp();
@@ -98,9 +105,23 @@ function NavUser() {
 }
 
 export default function AppSidebar() {
-  const { state } = useApp();
+  const { state, setActiveDrug, setActiveRegion } = useApp();
   const location = useLocation();
-  const drug = state.scenarios.base.drug;
+  const entry = getActiveDrug(state);
+  const drug = entry?.scenarios.base.drug;
+  const visibleDrugs = getVisibleDrugs(state);
+  const isGlobal = state.user?.role === 'global';
+
+  const region = state.regions.find(r => r.id === entry?.regionId);
+
+  const NAV_ITEMS = [
+    { to: '/dashboard', label: 'Dashboard',       Icon: LayoutDashboardIcon },
+    { to: '/inputs',    label: 'Forecast Inputs', Icon: SlidersVerticalIcon },
+    { to: '/sales',     label: 'Sales',           Icon: TrendingUpIcon },
+    { to: '/pl',        label: 'P&L',             Icon: TableIcon },
+    { to: '/analog',    label: 'Analogs',         Icon: GitCompareArrowsIcon },
+    ...(isGlobal ? [{ to: '/portfolio', label: 'Portfolio', Icon: LayoutGridIcon }] : []),
+  ];
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -128,13 +149,74 @@ export default function AppSidebar() {
         {/* Active asset */}
         <SidebarGroup>
           <SidebarGroupLabel>Active Asset</SidebarGroupLabel>
-          <div className="px-2 pb-2 flex items-start justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold text-sidebar-foreground">{drug.drugName}</p>
-              <p className="text-xs text-sidebar-foreground/50 mt-0.5">LOE: {formatLoeDate(drug.loeDate)}</p>
+
+          {/* Drug switcher (only when >1 drug visible) */}
+          {visibleDrugs.length > 1 ? (
+            <div className="px-2 pb-2">
+              <Select
+                value={state.activeDrugId}
+                onValueChange={setActiveDrug}
+              >
+                <SelectTrigger className="w-full h-9 text-xs bg-sidebar-accent/30 border-sidebar-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {visibleDrugs.map(d => {
+                    const r = state.regions.find(r => r.id === d.regionId);
+                    return (
+                      <SelectItem key={d.id} value={d.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{d.scenarios.base.drug.drugName}</span>
+                          {r && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${REGION_COLORS[r.id] ?? 'bg-muted text-muted-foreground'}`}>
+                              {r.name}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-            <Badge className="text-[10px] bg-primary/30 text-primary-foreground border-0 flex-shrink-0 mt-0.5">LOE</Badge>
-          </div>
+          ) : (
+            <div className="px-2 pb-2 flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-sidebar-foreground">{drug?.drugName ?? '—'}</p>
+                <p className="text-xs text-sidebar-foreground/50 mt-0.5">
+                  LOE: {drug ? formatLoeDate(drug.loeDate) : '—'}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <Badge className="text-[10px] bg-primary/30 text-primary-foreground border-0 flex-shrink-0 mt-0.5">LOE</Badge>
+                {region && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${REGION_COLORS[region.id] ?? 'bg-muted'}`}>
+                    {region.name}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Region filter (global users only) */}
+          {isGlobal && (
+            <div className="px-2 pb-1">
+              <Select
+                value={state.activeRegionId ?? 'all'}
+                onValueChange={v => setActiveRegion(v === 'all' ? undefined : v)}
+              >
+                <SelectTrigger className="w-full h-7 text-xs border-sidebar-border">
+                  <SelectValue placeholder="All Regions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Regions</SelectItem>
+                  {state.regions.map(r => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </SidebarGroup>
 
         <SidebarSeparator />

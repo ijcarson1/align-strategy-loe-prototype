@@ -1,4 +1,5 @@
 import { useApp } from '../context/AppContext';
+import { getActiveDrug } from '../lib/state';
 import { computeKPIs } from '../lib/forecasting';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,8 +24,11 @@ function rowColor(label: string, v: number) {
 export default function PLPage() {
   const { state } = useApp();
   const forecast = state.forecast[state.activeScenario];
-  const drug = state.scenarios[state.activeScenario].drug;
+  const entry = getActiveDrug(state);
+  const drug = entry?.scenarios[state.activeScenario].drug;
   const kpis = computeKPIs(forecast);
+
+  if (!drug) return null;
 
   // Only show post-historical periods (projected + post-LOE)
   const periods = forecast.filter(p => !p.isHistorical);

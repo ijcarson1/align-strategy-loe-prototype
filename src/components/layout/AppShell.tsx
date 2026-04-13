@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { getActiveDrug } from '../../lib/state';
 import AppSidebar from './Sidebar';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -15,11 +16,14 @@ function formatLoeDate(loeDate: string): string {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { state } = useApp();
   const location = useLocation();
+  const entry = getActiveDrug(state);
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Dashboard',
     '/inputs': 'Forecast Inputs',
     '/sales': 'Sales',
     '/pl': 'P&L',
+    '/analog': 'Analog Library',
+    '/portfolio': 'Portfolio',
   };
   const pageTitle = pageTitles[location.pathname] ?? 'Dashboard';
   const initials = state.user?.name.split(' ').map(n => n[0]).join('') ?? 'U';
@@ -36,7 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="min-w-0">
                 <h1 className="text-base font-medium truncate">{pageTitle}</h1>
                 <p className="text-xs text-muted-foreground truncate hidden sm:block">
-                  {state.scenarios.base.drug.drugName} · LOE {formatLoeDate(state.scenarios.base.drug.loeDate)}
+                  {entry?.scenarios.base.drug.drugName ?? '—'} · LOE {entry ? formatLoeDate(entry.scenarios.base.drug.loeDate) : '—'}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0 ml-4">
